@@ -64,6 +64,7 @@ __all__ = [
     "run_git_command",
     "trigger_detached_restart",
     "check_single_supadata_key",
+    "download_youtube_audio_file",
     "fetch_transcript",
     "fetch_transcript_cli",
     "fetch_transcript_supadata",

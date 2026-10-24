@@ -28,6 +28,8 @@ services:
       - JOB_TTL_SECONDS=${JOB_TTL_SECONDS:-21600}
     volumes:
       - media_data:/data
+    # Plain docker-compose honours mem_limit; deploy.resources applies to Swarm.
+    mem_limit: 3200m
     deploy:
       resources:
         limits:
