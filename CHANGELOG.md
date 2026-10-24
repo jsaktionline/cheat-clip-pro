@@ -3,14 +3,26 @@
 All notable changes to Cheat Clip PRO are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.2.0] — 2026-10-24
 
 ### Changed
 
+- Split `ClipStudioSection.tsx` (5,227 → ~4,520 lines) into focused modules
+  under `src/components/studio/`:
+  - `preferences.ts` — persisted studio settings (now validates corrupted
+    `null`/array/primitive payloads instead of throwing),
+  - `RenderErrorBox.tsx` — user-friendly render/error diagnostics,
+  - `text.ts` — letter casing + smart title wrapping,
+  - `useCustomFonts.ts`, `useStudioAudio.ts`, `useWatermarkSettings.ts`,
+    `useHardwareAcceleration.ts`, `useTempCleanup.ts` — self-contained hooks.
 - Extracted the cached-history parser from `App.tsx` into
   `src/utils/history.ts` with 6 additional unit tests (YouTube/upload/Drive
   entries, sorting, malformed data, unavailable storage). `App.tsx` is now
   ~80 lines shorter and the parser is independently testable.
+- Frontend test suite grew from 11 to **44 tests**, including a jsdom smoke
+  test that mounts the whole Clip Studio (catching hook-wiring regressions).
+- ESLint warnings reduced from 83 to 79 by removing `any` usages in the
+  extracted modules.
 
 ## [2.1.0] — 2026-10-24
 

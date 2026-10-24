@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   AlertTriangle, 
   RefreshCw, 
-  Copy, 
-  Check, 
   RotateCcw, 
   Trash2, 
   ArrowLeft, 
@@ -14,10 +12,8 @@ import {
   Pause
 } from 'lucide-react';
 import { useLanguage } from '../locales';
-import { resilientFetch } from '../utils/api';
 import { getStoredCookies, hasStoredCookies } from '../utils/cookieUtils';
 import { detectFaceClientSide } from '../utils/clientFaceDetector';
-import { isWebCodecsGpuSupported, getClientGpuName } from '../services/webcodecsRenderer';
 import type {
   ViralClip,
   RenderSettings,
@@ -34,8 +30,6 @@ import type {
   SubtitlePositionMode,
   BatchRenderProgress,
   HardwareAccelOption,
-  HardwareAccelInfo,
-  FontItem,
 } from '../types';
 
 interface ClipStudioSectionProps {
@@ -56,229 +50,19 @@ interface ClipStudioSectionProps {
   onBackToClips?: () => void;
 }
 
-function getFriendlyErrorMessage(rawMsg: string): string {
-  if (!rawMsg) return 'Rendering failed unexpectedly.';
-  const lower = rawMsg.toLowerCase();
-  if (lower.includes("moov atom not found")) {
-    return 'Download interrupted by internet lag ("moov atom not found"). The video stream was cut off before finishing. Click "[~] Retry" to re-download.';
-  }
-  if (lower.includes("bot verification") || lower.includes("sign in") || lower.includes("confirm you're not a bot")) {
-    return 'YouTube requires cookies verification. Click the [*] Cookies Manager button in the top navbar to save your YouTube cookies.';
-  }
-  if (lower.includes("rendering timed out") || (lower.includes("timed out") && lower.includes("rendering"))) {
-    return 'Video rendering timed out due to duration/complexity. Click "[~] Retry" or switch to Universal CPU encoder in Studio Settings.';
-  }
-  if (lower.includes("timed out") || lower.includes("timeout")) {
-    return 'Video download timed out due to slow/laggy internet connection. Click "[~] Retry" to try downloading again.';
-  }
-  if (lower.includes("hardware encoder") || (lower.includes("ffmpeg") && (lower.includes("nvenc") || lower.includes("amf") || lower.includes("qsv")))) {
-    return 'GPU hardware encoder failed. Please switch Video Encoder to "Universal CPU (libx264)" in Studio Settings.';
-  }
-  if (lower.includes("no space left") || lower.includes("disk full") || lower.includes("out of disk")) {
-    return 'Disk storage is full. Please click "[x] Clear Temp" to free up storage space.';
-  }
-  if (lower.includes("whisper") || lower.includes("transcribe")) {
-    return 'Word transcription failed. Check your audio track or switch subtitle style to none.';
-  }
-  if (lower.includes("ffmpeg") || lower.includes("filter_complex")) {
-    return 'FFmpeg video rendering failed during composition. Check error details below.';
-  }
-  return rawMsg.length > 140 ? rawMsg.slice(0, 140) + '...' : rawMsg;
-}
-
-const ClipRenderErrorBox: React.FC<{ errorMessage: string; t: any; onRetry?: () => void }> = ({ errorMessage, t, onRetry }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(errorMessage);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const friendly = getFriendlyErrorMessage(errorMessage);
-
-  return (
-    <div
-      style={{
-        marginTop: '0.4rem',
-        padding: '0.55rem 0.75rem',
-        background: 'rgba(255, 30, 39, 0.12)',
-        border: '1px solid #ff1e27',
-        borderRadius: 0,
-        fontSize: '0.72rem',
-        color: '#fca5a5',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.35rem',
-        lineHeight: 1.4,
-        wordBreak: 'break-word',
-        boxShadow: '0 0 10px rgba(255, 30, 39, 0.25)'
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.6rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-          <AlertTriangle size={15} color="#ff1e27" style={{ flexShrink: 0, marginTop: '1px' }} />
-          <span style={{ fontWeight: 700, color: '#fff' }}>{friendly}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-          {onRetry && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRetry();
-              }}
-              style={{
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                border: '1px solid rgba(245, 158, 11, 0.6)',
-                borderRadius: 0,
-                color: '#ffffff',
-                fontSize: '0.65rem',
-                padding: '2px 8px',
-                cursor: 'pointer',
-                fontWeight: 700,
-                transition: 'all 0.2s ease',
-                boxShadow: '0 0 8px rgba(245, 158, 11, 0.35)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
-              title="Retry rendering this clip"
-            >
-              <RefreshCw size={11} />
-              {t.studio.retryClipBtn || 'Retry'}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleCopy}
-            style={{
-              background: copied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-              border: `1px solid ${copied ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.15)'}`,
-              borderRadius: 0,
-              color: copied ? '#34d399' : '#e2e8f0',
-              fontSize: '0.65rem',
-              padding: '2px 7px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              transition: 'all 0.2s ease',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.25rem'
-            }}
-            title="Copy full error details"
-          >
-            {copied ? <Check size={11} /> : <Copy size={11} />}
-            {copied ? (t.studio.copiedErrorBtn || 'Copied!') : (t.studio.copyErrorBtn || 'Copy')}
-          </button>
-        </div>
-      </div>
-
-      <details style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.15rem' }}>
-        <summary style={{ cursor: 'pointer', color: '#cbd5e1', userSelect: 'none', fontWeight: 500 }}>
-          {t.studio.errorDetails || 'Technical Log Details'}
-        </summary>
-        <pre
-          style={{
-            margin: '0.35rem 0 0 0',
-            padding: '0.4rem 0.55rem',
-            background: 'rgba(0, 0, 0, 0.55)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
-            borderRadius: '4px',
-            color: '#f87171',
-            fontSize: '0.65rem',
-            fontFamily: 'Consolas, Monaco, monospace',
-            whiteSpace: 'pre-wrap',
-            maxHeight: '130px',
-            overflowY: 'auto',
-          }}
-        >
-          {errorMessage}
-        </pre>
-      </details>
-    </div>
-  );
-};
-
-export const STUDIO_PREFS_KEY = 'cheat_clip_studio_preferences';
-
-export interface StudioPreferences {
-  aspectRatio?: AspectRatioOption;
-  backgroundStyle?: BackgroundStyle;
-  enableFaceTracking?: boolean;
-  streamerPreset?: StreamerPreset;
-  facecamPosition?: FacecamPosition;
-  titlePosition?: TitlePosition;
-  captionStyle?: CaptionStyle;
-  captionFont?: CaptionFont;
-  titleFont?: CaptionFont;
-  fontSize?: FontSizeOption;
-  fontSizePx?: number;
-  titleFontSize?: FontSizeOption;
-  titleFontSizePx?: number;
-  textCase?: TextCaseOption;
-  titleTextCase?: TextCaseOption;
-  subtitlePositionMode?: SubtitlePositionMode;
-  titleDuration?: TitleDurationOption;
-  originalAudioVolume?: number;
-  hardwareAccel?: HardwareAccelOption;
-  titleYPercent?: number;
-  subtitleYPercent?: number;
-  subtitleCenterYPercent?: number;
-  isCustomTitleY?: boolean;
-  bgmVolume?: number;
-  hookSfxVolume?: number;
-  renderMode?: 'separate' | 'merged';
-  fileNamePrefix?: string;
-  fileNameSuffix?: string;
-  titlePrefix?: string;
-  titleSuffix?: string;
-}
-
-export const DEFAULT_STUDIO_PREFS: Required<StudioPreferences> = {
-  aspectRatio: '9:16',
-  backgroundStyle: 'black',
-  enableFaceTracking: true,
-  streamerPreset: 'none',
-  facecamPosition: 'auto',
-  titlePosition: 'auto',
-  captionStyle: 'viral_pop',
-  captionFont: 'Outfit',
-  titleFont: 'Outfit',
-  fontSize: 'medium',
-  fontSizePx: 75,
-  titleFontSize: 'medium',
-  titleFontSizePx: 75,
-  textCase: 'uppercase',
-  titleTextCase: 'uppercase',
-  subtitlePositionMode: 'bottom',
-  titleDuration: 'entire',
-  originalAudioVolume: 100,
-  hardwareAccel: 'browser_wasm',
-  titleYPercent: 17,
-  subtitleYPercent: 21,
-  subtitleCenterYPercent: 50,
-  isCustomTitleY: false,
-  bgmVolume: 25,
-  hookSfxVolume: 100,
-  renderMode: 'separate',
-  fileNamePrefix: '',
-  fileNameSuffix: '',
-  titlePrefix: '',
-  titleSuffix: '',
-};
-
-function getSavedStudioPreferences(): Partial<StudioPreferences> {
-  try {
-    const raw = localStorage.getItem(STUDIO_PREFS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Partial<StudioPreferences>;
-  } catch (e) {
-    console.warn('Failed to parse studio preferences from localStorage:', e);
-    return {};
-  }
-}
+import { ClipRenderErrorBox } from './studio/RenderErrorBox';
+import {
+  DEFAULT_STUDIO_PREFS,
+  STUDIO_PREFS_KEY,
+  getSavedStudioPreferences,
+  type StudioPreferences,
+} from './studio/preferences';
+import { useCustomFonts } from './studio/useCustomFonts';
+import { useStudioAudio } from './studio/useStudioAudio';
+import { useWatermarkSettings } from './studio/useWatermarkSettings';
+import { useHardwareAcceleration } from './studio/useHardwareAcceleration';
+import { useTempCleanup } from './studio/useTempCleanup';
+import { applyLetterCase, formatTitleSmart } from './studio/text';
 
 export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   videoUrl,
@@ -331,6 +115,20 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   });
   const [captionFont, setCaptionFont] = useState<CaptionFont>(() => getSavedStudioPreferences().captionFont ?? DEFAULT_STUDIO_PREFS.captionFont);
   const [titleFont, setTitleFont] = useState<CaptionFont>(() => getSavedStudioPreferences().titleFont ?? DEFAULT_STUDIO_PREFS.titleFont);
+  const {
+    availableFonts,
+    isUploadingFont,
+    isTitleFontDragging,
+    setIsTitleFontDragging,
+    isSubFontDragging,
+    setIsSubFontDragging,
+    titleFontInputRef,
+    subtitleFontInputRef,
+    handleUploadFont,
+  } = useCustomFonts({
+    onSelectTitleFont: (name) => setTitleFont(name as CaptionFont),
+    onSelectCaptionFont: (name) => setCaptionFont(name as CaptionFont),
+  });
   const [fontSize, setFontSize] = useState<FontSizeOption>(() => getSavedStudioPreferences().fontSize ?? DEFAULT_STUDIO_PREFS.fontSize);
   const [fontSizePx, setFontSizePx] = useState<number>(() => getSavedStudioPreferences().fontSizePx ?? DEFAULT_STUDIO_PREFS.fontSizePx);
   const [titleFontSize, setTitleFontSize] = useState<FontSizeOption>(() => getSavedStudioPreferences().titleFontSize ?? DEFAULT_STUDIO_PREFS.titleFontSize);
@@ -342,22 +140,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const [renderMode, setRenderMode] = useState<'separate' | 'merged'>(() => getSavedStudioPreferences().renderMode ?? DEFAULT_STUDIO_PREFS.renderMode);
   const [compilationTitle, setCompilationTitle] = useState<string>('');
 
-  // Custom Font Library State
-  const [availableFonts, setAvailableFonts] = useState<FontItem[]>([
-    { name: 'Outfit', is_custom: false },
-    { name: 'Montserrat', is_custom: false },
-    { name: 'Inter', is_custom: false },
-    { name: 'Impact', is_custom: false },
-    { name: 'Bebas Neue', is_custom: false },
-    { name: 'Anton', is_custom: false },
-    { name: 'Poppins', is_custom: false },
-    { name: 'Arial Black', is_custom: false },
-  ]);
-  const [isUploadingFont, setIsUploadingFont] = useState<boolean>(false);
-  const [isTitleFontDragging, setIsTitleFontDragging] = useState<boolean>(false);
-  const [isSubFontDragging, setIsSubFontDragging] = useState<boolean>(false);
-  const titleFontInputRef = useRef<HTMLInputElement | null>(null);
-  const subtitleFontInputRef = useRef<HTMLInputElement | null>(null);
   const [fileNamePrefix, setFileNamePrefix] = useState<string>(() => getSavedStudioPreferences().fileNamePrefix ?? DEFAULT_STUDIO_PREFS.fileNamePrefix);
   const [fileNameSuffix, setFileNameSuffix] = useState<string>(() => getSavedStudioPreferences().fileNameSuffix ?? DEFAULT_STUDIO_PREFS.fileNameSuffix);
 
@@ -368,159 +150,39 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const [subtitleCenterYPercent, setSubtitleCenterYPercent] = useState<number>(() => getSavedStudioPreferences().subtitleCenterYPercent ?? DEFAULT_STUDIO_PREFS.subtitleCenterYPercent);
   const [isCustomTitleY, setIsCustomTitleY] = useState<boolean>(() => getSavedStudioPreferences().isCustomTitleY ?? DEFAULT_STUDIO_PREFS.isCustomTitleY);
   const [titleDuration, setTitleDuration] = useState<TitleDurationOption>(() => getSavedStudioPreferences().titleDuration ?? DEFAULT_STUDIO_PREFS.titleDuration);
-  const [isClearingTemp, setIsClearingTemp] = useState<boolean>(false);
-  const [tempClearMsg, setTempClearMsg] = useState<string>('');
-  const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
 
-  // Original Voice Audio Boost (0% - 200%, default 100%)
-  const [originalAudioVolume, setOriginalAudioVolume] = useState<number>(() => getSavedStudioPreferences().originalAudioVolume ?? DEFAULT_STUDIO_PREFS.originalAudioVolume);
+  const {
+    originalAudioVolume, setOriginalAudioVolume,
+    bgmEnabled, setBgmEnabled, bgmFileName, bgmFilePath,
+    bgmAudioUrl, bgmVolume, setBgmVolume, bgmDuration, bgmStartOffset,
+    isBgmPlaying, setIsBgmPlaying, isUploadingBgm, isBgmDragging, setIsBgmDragging, bgmAudioRef,
+    hookSfxFileName, hookSfxFilePath, hookSfxAudioUrl, hookSfxVolume, setHookSfxVolume,
+    isHookSfxPlaying, setIsHookSfxPlaying, isUploadingHookSfx, isHookSfxDragging, setIsHookSfxDragging,
+    hookSfxAudioRef,
+    uploadBgmFile, handleBgmUpload, handleBgmLoadedMetadata, handleBgmStartOffsetChange,
+    handleRemoveBgm, toggleBgmPlayback,
+    uploadHookSfxFile, handleHookSfxUpload, handleRemoveHookSfx, toggleHookSfxPlayback,
+  } = useStudioAudio();
 
-  // Background Music (BGM) state
-  const [bgmEnabled, setBgmEnabled] = useState<boolean>(false);
-  const [bgmFileName, setBgmFileName] = useState<string>('');
-  const [bgmFilePath, setBgmFilePath] = useState<string>('');
-  const [bgmAudioUrl, setBgmAudioUrl] = useState<string>('');
-  const [bgmVolume, setBgmVolume] = useState<number>(() => getSavedStudioPreferences().bgmVolume ?? DEFAULT_STUDIO_PREFS.bgmVolume);
-  const [bgmDuration, setBgmDuration] = useState<number>(0);
-  const [bgmStartOffset, setBgmStartOffset] = useState<number>(0);
-  const [isBgmPlaying, setIsBgmPlaying] = useState<boolean>(false);
-  const [isUploadingBgm, setIsUploadingBgm] = useState<boolean>(false);
-  const [isBgmDragging, setIsBgmDragging] = useState<boolean>(false);
-  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const {
+    isClearingTemp, tempClearMsg, showClearConfirmModal, setShowClearConfirmModal,
+    handleClearTempClick, executeClearTemp,
+  } = useTempCleanup();
 
-  // Hook Sound Effect (SFX) state
-  const [hookSfxFileName, setHookSfxFileName] = useState<string>('');
-  const [hookSfxFilePath, setHookSfxFilePath] = useState<string>('');
-  const [hookSfxAudioUrl, setHookSfxAudioUrl] = useState<string>('');
-  const [hookSfxVolume, setHookSfxVolume] = useState<number>(() => getSavedStudioPreferences().hookSfxVolume ?? DEFAULT_STUDIO_PREFS.hookSfxVolume);
-  const [isHookSfxPlaying, setIsHookSfxPlaying] = useState<boolean>(false);
-  const [isUploadingHookSfx, setIsUploadingHookSfx] = useState<boolean>(false);
-  const [isHookSfxDragging, setIsHookSfxDragging] = useState<boolean>(false);
-  const hookSfxAudioRef = useRef<HTMLAudioElement | null>(null);
+  const {
+    watermarkEnabled, setWatermarkEnabled, watermarkType,
+    watermarkImageFileName, watermarkImageFilePath, watermarkImageUrl,
+    watermarkText, setWatermarkText, watermarkSize, setWatermarkSize,
+    watermarkOpacity, setWatermarkOpacity, watermarkX, setWatermarkX, watermarkY, setWatermarkY,
+    isUploadingWatermark, isWatermarkDragging, setIsWatermarkDragging, phoneContainerRef,
+    uploadWatermarkFile, handleWatermarkUpload, handleRemoveWatermarkImage, handleSelectWatermarkType,
+    handleResetWatermark, applyWatermarkPreset,
+  } = useWatermarkSettings();
 
-  // Watermark state & default configs
-  const [watermarkEnabled, setWatermarkEnabled] = useState<boolean>(false);
-  const [watermarkType, setWatermarkType] = useState<'image' | 'text'>('image');
-  const [watermarkImageFileName, setWatermarkImageFileName] = useState<string>('');
-  const [watermarkImageFilePath, setWatermarkImageFilePath] = useState<string>('');
-  const [watermarkImageUrl, setWatermarkImageUrl] = useState<string>('');
-  const [watermarkText, setWatermarkText] = useState<string>('');
-  const [watermarkSize, setWatermarkSize] = useState<number>(20);
-  const [watermarkOpacity, setWatermarkOpacity] = useState<number>(80);
-  const [watermarkX, setWatermarkX] = useState<number>(88);
-  const [watermarkY, setWatermarkY] = useState<number>(8);
-  const [isUploadingWatermark, setIsUploadingWatermark] = useState<boolean>(false);
-  const [isWatermarkDragging, setIsWatermarkDragging] = useState<boolean>(false);
-  const phoneContainerRef = useRef<HTMLDivElement | null>(null);
-
-  const [isLocalhost] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const h = window.location.hostname;
-      return h === 'localhost' || h === '127.0.0.1';
-    }
-    return false;
-  });
-
-  const [clientGpuName] = useState<string>(() => getClientGpuName());
-  const [hasWebCodecs] = useState<boolean>(() => isWebCodecsGpuSupported());
-
-  // Hardware acceleration / Video Encoder state: default to 'auto' on localhost, 'client_gpu' or 'browser_wasm' on deployed domain
-  const [hardwareAccel, setHardwareAccel] = useState<HardwareAccelOption>(() => {
-    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    if (!isLocal) {
-      return isWebCodecsGpuSupported() ? 'client_gpu' : 'browser_wasm';
-    }
-    const saved = getSavedStudioPreferences().hardwareAccel;
-    return (saved && saved !== 'browser_wasm') ? saved : 'auto';
-  });
-  const [hardwareInfo, setHardwareInfo] = useState<HardwareAccelInfo | null>(null);
-  const [hwDropdownOpen, setHwDropdownOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!isLocalhost) {
-      // On deployed domain, force client engine (prefer client_gpu)
-      setHardwareAccel(isWebCodecsGpuSupported() ? 'client_gpu' : 'browser_wasm');
-      return;
-    }
-    const fetchHardwareSupport = async () => {
-      try {
-        const res = await resilientFetch('/api/hardware-accel', { maxRetries: 4, retryDelay: 1000, silent: true });
-        if (res.ok) {
-          const data: HardwareAccelInfo = await res.json();
-          setHardwareInfo(data);
-        }
-      } catch {
-        // Backend offline or loading
-      }
-    };
-    fetchHardwareSupport();
-  }, []);
-
-  const loadCustomFontFace = (name: string, url: string) => {
-    try {
-      // Isolate custom font face name or specify descriptors so it does not overwrite global UI font definitions (e.g. 'Inter' 400)
-      const isSystemUiFont = ['inter', 'outfit', 'jetbrains mono', 'roboto', 'segoe ui'].includes(name.trim().toLowerCase());
-      const familyName = isSystemUiFont ? `Preview-${name}` : name;
-      const font = new FontFace(familyName, `url(${url})`);
-      font.load().then(loaded => {
-        (document.fonts as Set<FontFace>).add(loaded);
-      }).catch(err => console.warn(`Font '${name}' load error:`, err));
-    } catch (e) {
-      console.warn('FontFace API error:', e);
-    }
-  };
-
-  useEffect(() => {
-    const fetchAvailableFonts = async () => {
-      try {
-        const res = await resilientFetch('/api/fonts', { maxRetries: 3, retryDelay: 1000, silent: true });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.fonts)) {
-            setAvailableFonts(data.fonts);
-            data.fonts.forEach((f: FontItem) => {
-              if (f.url) loadCustomFontFace(f.name, f.url);
-            });
-          }
-        }
-      } catch {
-        // Fallback to built-in fonts
-      }
-    };
-    fetchAvailableFonts();
-  }, []);
-
-  const handleUploadFont = async (file: File, target: 'title' | 'subtitle') => {
-    if (!file) return;
-    setIsUploadingFont(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await resilientFetch('/api/upload-font', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success && data.font_name) {
-        if (data.url) loadCustomFontFace(data.font_name, data.url);
-        setAvailableFonts(prev => {
-          if (!prev.some(f => f.name.toLowerCase() === data.font_name.toLowerCase())) {
-            return [...prev, { name: data.font_name, is_custom: true, filename: data.filename, url: data.url }];
-          }
-          return prev;
-        });
-        if (target === 'title') {
-          setTitleFont(data.font_name);
-        } else {
-          setCaptionFont(data.font_name);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to upload custom font:', err);
-    } finally {
-      setIsUploadingFont(false);
-    }
-  };
+  const {
+    isLocalhost, clientGpuName, hasWebCodecs, hardwareAccel, setHardwareAccel,
+    hardwareInfo, hwDropdownOpen, setHwDropdownOpen,
+  } = useHardwareAcceleration();
 
   // Playable video player state
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -926,378 +588,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const totalSelectedDuration = useMemo(() => {
     return Math.round(selectedClips.reduce((acc, c) => acc + (c.end_time - c.start_time), 0));
   }, [selectedClips]);
-
-  const handleClearTempClick = () => {
-    setShowClearConfirmModal(true);
-  };
-
-  const executeClearTemp = async () => {
-    if (isClearingTemp) return;
-    setIsClearingTemp(true);
-    setTempClearMsg('');
-    try {
-      const resp = await fetch('/api/clear-temp', { method: 'POST' });
-      if (resp.ok) {
-        const data = await resp.json();
-        setTempClearMsg(`✓ ${data.message || 'Temp folder cleared!'}`);
-        setTimeout(() => setTempClearMsg(''), 4500);
-      } else {
-        setTempClearMsg('Failed to clear temp cache');
-      }
-    } catch (e) {
-      console.error('Error clearing temp cache:', e);
-      setTempClearMsg('Error clearing temp cache');
-    } finally {
-      setIsClearingTemp(false);
-      setShowClearConfirmModal(false);
-    }
-  };
-
-  // Background Music handlers
-  const uploadBgmFile = async (file: File) => {
-    if (!file) return;
-    setIsUploadingBgm(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload-bgm', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to upload background music');
-      }
-      const data = await res.json();
-      setBgmFileName(data.filename || file.name);
-      setBgmFilePath(data.file_path);
-      setBgmAudioUrl(data.url);
-      setBgmEnabled(true);
-    } catch (err) {
-      console.error('BGM upload error:', err);
-      alert('Failed to upload background music file. Please try an MP3, WAV, or M4A file.');
-    } finally {
-      setIsUploadingBgm(false);
-    }
-  };
-
-  const handleBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadBgmFile(file);
-    e.target.value = '';
-  };
-
-  const handleBgmLoadedMetadata = () => {
-    if (bgmAudioRef.current) {
-      const dur = bgmAudioRef.current.duration;
-      if (dur && !isNaN(dur)) {
-        setBgmDuration(dur);
-      }
-    }
-  };
-
-  const handleBgmStartOffsetChange = (newOffset: number) => {
-    setBgmStartOffset(newOffset);
-    if (bgmAudioRef.current) {
-      bgmAudioRef.current.currentTime = newOffset;
-    }
-  };
-
-  const handleRemoveBgm = () => {
-    if (bgmAudioRef.current) {
-      bgmAudioRef.current.pause();
-    }
-    setIsBgmPlaying(false);
-    setBgmEnabled(false);
-    setBgmFileName('');
-    setBgmFilePath('');
-    setBgmAudioUrl('');
-    setBgmDuration(0);
-    setBgmStartOffset(0);
-  };
-
-  const toggleBgmPlayback = () => {
-    if (!bgmAudioRef.current) return;
-    if (isBgmPlaying) {
-      bgmAudioRef.current.pause();
-      setIsBgmPlaying(false);
-    } else {
-      bgmAudioRef.current.currentTime = bgmStartOffset;
-      bgmAudioRef.current.volume = Math.max(0, Math.min(1, bgmVolume / 100));
-      bgmAudioRef.current.play().then(() => setIsBgmPlaying(true)).catch(console.error);
-    }
-  };
-
-  useEffect(() => {
-    if (bgmAudioRef.current) {
-      bgmAudioRef.current.volume = Math.max(0, Math.min(1, bgmVolume / 100));
-    }
-  }, [bgmVolume]);
-
-  // Hook SFX handlers
-  const uploadHookSfxFile = async (file: File) => {
-    if (!file) return;
-    setIsUploadingHookSfx(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload-sfx', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to upload hook sound effect');
-      }
-      const data = await res.json();
-      setHookSfxFileName(data.filename || file.name);
-      setHookSfxFilePath(data.file_path);
-      setHookSfxAudioUrl(data.url);
-    } catch (err) {
-      console.error('SFX upload error:', err);
-      alert('Failed to upload sound effect file. Please try an MP3, WAV, or M4A file.');
-    } finally {
-      setIsUploadingHookSfx(false);
-    }
-  };
-
-  const handleHookSfxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadHookSfxFile(file);
-    e.target.value = '';
-  };
-
-  const handleRemoveHookSfx = () => {
-    if (hookSfxAudioRef.current) {
-      hookSfxAudioRef.current.pause();
-    }
-    setIsHookSfxPlaying(false);
-    setHookSfxFileName('');
-    setHookSfxFilePath('');
-    setHookSfxAudioUrl('');
-  };
-
-  const toggleHookSfxPlayback = () => {
-    if (!hookSfxAudioRef.current) return;
-    if (isHookSfxPlaying) {
-      hookSfxAudioRef.current.pause();
-      setIsHookSfxPlaying(false);
-    } else {
-      hookSfxAudioRef.current.currentTime = 0;
-      hookSfxAudioRef.current.volume = Math.max(0, Math.min(1, hookSfxVolume / 100));
-      hookSfxAudioRef.current.play().then(() => setIsHookSfxPlaying(true)).catch(console.error);
-    }
-  };
-
-  useEffect(() => {
-    if (hookSfxAudioRef.current) {
-      hookSfxAudioRef.current.volume = Math.max(0, Math.min(1, hookSfxVolume / 100));
-    }
-  }, [hookSfxVolume]);
-
-  // Watermark handlers
-  const uploadWatermarkFile = async (file: File) => {
-    if (!file) return;
-    setIsUploadingWatermark(true);
-    let localUrl = '';
-    try {
-      localUrl = URL.createObjectURL(file);
-      setWatermarkImageUrl(localUrl);
-      setWatermarkImageFileName(file.name);
-
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload-watermark', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to upload watermark');
-      }
-      const data = await res.json();
-      setWatermarkImageFilePath(data.file_path);
-      setWatermarkImageFileName(data.filename || file.name);
-      setWatermarkImageUrl(data.url || localUrl);
-      setWatermarkEnabled(true);
-    } catch (err) {
-      console.error('Watermark upload error:', err);
-      const msg = err instanceof Error ? err.message : 'Failed to upload watermark image.';
-      alert(msg);
-      if (localUrl) {
-        try { URL.revokeObjectURL(localUrl); } catch { /* ignore */ }
-      }
-      setWatermarkImageFilePath('');
-      setWatermarkImageUrl('');
-      setWatermarkImageFileName('');
-    } finally {
-      setIsUploadingWatermark(false);
-    }
-  };
-
-  const handleWatermarkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadWatermarkFile(file);
-    e.target.value = '';
-  };
-
-  const handleRemoveWatermarkImage = () => {
-    setWatermarkImageFileName('');
-    setWatermarkImageFilePath('');
-    setWatermarkImageUrl('');
-  };
-
-  const getDefaultWatermarkConfig = (type: 'image' | 'text') => {
-    if (type === 'image') {
-      return {
-        size: 20,
-        opacity: 80,
-        x: 88,
-        y: 8,
-      };
-    } else {
-      return {
-        size: 20,
-        opacity: 80,
-        x: 50,
-        y: 92,
-      };
-    }
-  };
-
-  const handleSelectWatermarkType = (type: 'image' | 'text') => {
-    setWatermarkType(type);
-    const defaults = getDefaultWatermarkConfig(type);
-    setWatermarkSize(defaults.size);
-    setWatermarkOpacity(defaults.opacity);
-    setWatermarkX(defaults.x);
-    setWatermarkY(defaults.y);
-    if (type === 'text' && !watermarkText.trim()) {
-      setWatermarkText('@channel');
-    }
-  };
-
-  const handleResetWatermark = () => {
-    const defaults = getDefaultWatermarkConfig(watermarkType);
-    setWatermarkSize(defaults.size);
-    setWatermarkOpacity(defaults.opacity);
-    setWatermarkX(defaults.x);
-    setWatermarkY(defaults.y);
-    if (watermarkType === 'text' && !watermarkText.trim()) {
-      setWatermarkText('@channel');
-    }
-  };
-
-  const applyWatermarkPreset = (preset: 'tl' | 'tc' | 'tr' | 'c' | 'bl' | 'bc' | 'br') => {
-    const halfW = Math.round(watermarkSize / 2);
-    const leftX = Math.max(4, Math.min(50, halfW + 2));
-    const rightX = Math.min(96, Math.max(50, 100 - halfW - 2));
-    const topY = 8;
-    const bottomY = 92;
-
-    switch (preset) {
-      case 'tl':
-        setWatermarkX(leftX);
-        setWatermarkY(topY);
-        break;
-      case 'tc':
-        setWatermarkX(50);
-        setWatermarkY(topY);
-        break;
-      case 'tr':
-        setWatermarkX(rightX);
-        setWatermarkY(topY);
-        break;
-      case 'c':
-        setWatermarkX(50);
-        setWatermarkY(50);
-        break;
-      case 'bl':
-        setWatermarkX(leftX);
-        setWatermarkY(bottomY);
-        break;
-      case 'bc':
-        setWatermarkX(50);
-        setWatermarkY(bottomY);
-        break;
-      case 'br':
-        setWatermarkX(rightX);
-        setWatermarkY(bottomY);
-        break;
-    }
-  };
-
-  const applyLetterCase = (text: string, style: TextCaseOption): string => {
-    if (style === 'uppercase') return text.toUpperCase();
-    if (style === 'lowercase') return text.toLowerCase();
-    return text.toLowerCase().replace(/(?:^|\s|\b)\w/g, c => c.toUpperCase());
-  };
-
-  /**
-   * Intelligently wraps title across 1, 2, 3, or up to 4 balanced lines,
-   * matching backend video_engine.wrap_title_smart logic.
-   */
-  const formatTitleSmart = (
-    rawText: string,
-    style: TextCaseOption,
-    sizePreset: FontSizeOption = titleFontSize
-  ): { formatted: string; lineCount: number } => {
-    const raw = rawText.trim();
-    if (!raw) return { formatted: '', lineCount: 1 };
-
-    const cased = applyLetterCase(raw, style);
-
-    // Preserve manual line breaks if user typed them
-    if (cased.includes('\n')) {
-      const manualLines = cased
-        .split('\n')
-        .map(l => l.trim())
-        .filter(Boolean);
-      return {
-        formatted: manualLines.join('\n'),
-        lineCount: Math.max(1, manualLines.length),
-      };
-    }
-
-    const words = cased.split(/\s+/).filter(Boolean);
-    const maxSingleLen = sizePreset === 'small' ? 24 : sizePreset === 'big' ? 13 : 19;
-    if (words.length <= 1 || cased.length <= maxSingleLen) {
-      return { formatted: cased, lineCount: 1 };
-    }
-
-    const totalLen = cased.length;
-    const targetLines = Math.min(4, Math.max(2, Math.ceil(totalLen / maxSingleLen)));
-
-    const targetPerLine = totalLen / targetLines;
-    const lines: string[] = [];
-    let currentLine: string[] = [];
-    let currentLen = 0;
-
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i];
-      const remainingWords = words.length - i;
-      const remainingLines = targetLines - lines.length;
-
-      if (
-        remainingLines > 1 &&
-        currentLine.length > 0 &&
-        (currentLen + w.length > targetPerLine * 1.15 || remainingWords <= remainingLines - 1)
-      ) {
-        lines.push(currentLine.join(' '));
-        currentLine = [w];
-        currentLen = w.length;
-      } else {
-        currentLine.push(w);
-        currentLen += w.length + 1;
-      }
-    }
-
-    if (currentLine.length > 0) {
-      lines.push(currentLine.join(' '));
-    }
-
-    return { formatted: lines.join('\n'), lineCount: Math.max(1, lines.length) };
-  };
 
   /**
    * Safe defaults for each aspect ratio and line count:

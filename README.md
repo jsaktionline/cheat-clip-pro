@@ -14,7 +14,7 @@ This branch is a security and quality-focused iteration of `master`:
 * 🔑 Optional `X-API-Key` protection for all state-changing API calls.
 * 🧹 TTL-based pruning of in-memory render/download jobs (no more memory leak).
 * 🐳 Docker volumes and healthcheck fixed (renders/uploads now persist).
-* ✅ 81 backend tests + 17 frontend tests, `ruff` clean, ESLint 0 errors,
+* ✅ 81 backend tests + 44 frontend tests, `ruff` clean, ESLint 0 errors,
   CI template included.
 * 📄 `LICENSE`, `SECURITY.md`, `CHANGELOG.md` added.
 
@@ -207,6 +207,7 @@ See [LICENSE](LICENSE).
 ```
 src/                      React 19 + Vite 8 + TypeScript (UI)
   components/             Feature components + co-located CSS modules
+  components/studio/      Clip Studio hooks, preferences, helpers, error box
   hooks/                  Reusable hooks (AI model catalogue)
   services/               Client-side renderers (FFmpeg WASM, WebCodecs)
   utils/                  API client, cookies, face detection, server key
