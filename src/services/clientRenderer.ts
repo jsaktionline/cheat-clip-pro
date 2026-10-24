@@ -1,5 +1,10 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
+// Self-hosted FFmpeg core (bundled by Vite). This removes the previous
+// runtime dependency on unpkg/jsDelivr, so client-side rendering works fully
+// offline and the app no longer leaks requests to third-party CDNs.
+import coreURL from '@ffmpeg/core?url';
+import wasmURL from '@ffmpeg/core/wasm?url';
 
 let ffmpegInstance: FFmpeg | null = null;
 let isLoaded = false;
@@ -44,26 +49,19 @@ export async function getFFmpeg(onLoadProgress?: (ratio: number) => void): Promi
       }
     });
 
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-    
     try {
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
+      await ffmpeg.load({ coreURL, wasmURL });
       isLoaded = true;
       ffmpegInstance = ffmpeg;
       return ffmpeg;
     } catch (err) {
-      console.warn('Primary ESM FFmpeg WASM load failed, trying standard core fallback...', err);
-      const fallbackBase = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${fallbackBase}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${fallbackBase}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
-      isLoaded = true;
-      ffmpegInstance = ffmpeg;
-      return ffmpeg;
+      // Allow a later retry instead of caching a rejected promise forever.
+      loadPromise = null;
+      console.error('Failed to initialise the bundled FFmpeg WASM core:', err);
+      throw new Error(
+        'Failed to initialise the in-browser renderer. Please reload the page and try again.',
+        { cause: err },
+      );
     }
   })();
 

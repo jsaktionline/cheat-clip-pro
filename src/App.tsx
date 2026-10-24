@@ -6,13 +6,13 @@ import { CookiesModal } from './components/CookiesModal';
 import { CookieWarningModal } from './components/CookieWarningModal';
 import { ClipTrimmerModal } from './components/ClipTrimmerModal';
 import { AppUpdateModal } from './components/AppUpdateModal';
-import { resilientFetch } from './utils/api';
 import { getStoredCookies, hasStoredCookies } from './utils/cookieUtils';
 import { getServerApiKey, setServerApiKey } from './utils/serverKey';
 import { extractAudioFromVideoClient } from './utils/audioExtractor';
 import { renderClipClientSide, triggerBrowserDownload } from './services/clientRenderer';
 import { renderClipWebCodecs, isWebCodecsGpuSupported } from './services/webcodecsRenderer';
 import { useLanguage } from './locales';
+import { useAiModels } from './hooks/useAiModels';
 import { HackerApiKeyInput } from './components/HackerApiKeyInput';
 import {
   Play,
@@ -83,8 +83,6 @@ export default function App() {
     const saved = localStorage.getItem('cheat_clip_openrouter_model');
     return saved || 'google/gemini-2.5-flash';
   });
-  const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; name: string; description?: string; context_length?: number; recommended?: boolean }>>([]);
-  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
   const [customOpenRouterModel, setCustomOpenRouterModel] = useState<string>('');
   const [isCustomOpenRouterModel, setIsCustomOpenRouterModel] = useState<boolean>(false);
   const [isCookiesModalOpen, setIsCookiesModalOpen] = useState(false);
@@ -135,8 +133,6 @@ export default function App() {
     }
     return saved || 'gemini-2.5-flash';
   });
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [targetClipCount, setTargetClipCount] = useState<number>(() => {
     const val = localStorage.getItem('cheat_clip_target_clip_count');
@@ -199,6 +195,23 @@ export default function App() {
   const [aiDetail, setAiDetail] = useState<string>('');
   const [activeProcessingModel, setActiveProcessingModel] = useState<string>('');
   const [loadingElapsedTime, setLoadingElapsedTime] = useState<number>(0);
+
+  // AI model catalogue (Gemini + OpenRouter) with header-based key transport.
+  const handleSelectAiModel = useCallback((model: string) => {
+    setSelectedModel(model);
+    localStorage.setItem('cheat_clip_selected_model', model);
+  }, []);
+  const {
+    availableModels,
+    loadingModels,
+    openRouterModels,
+    loadingOpenRouterModels,
+  } = useAiModels({
+    apiKey,
+    openRouterKey,
+    selectedModel,
+    onSelectModel: handleSelectAiModel,
+  });
 
   // Active timer during loading so the user always sees live activity
   useEffect(() => {
@@ -875,79 +888,6 @@ export default function App() {
       }
     };
   }, [result]);
-
-  // Fetch available AI models when API key is detected/entered
-  useEffect(() => {
-    const fetchModels = async () => {
-      const cleanKey = apiKey.trim();
-      if (!cleanKey || cleanKey.length < 20 || cleanKey.toLowerCase() === 'mock') {
-        setAvailableModels([]);
-        return;
-      }
-      setLoadingModels(true);
-      try {
-        const res = await resilientFetch('/api/models', {
-          headers: { 'X-Gemini-Api-Key': cleanKey },
-          maxRetries: 3,
-          retryDelay: 800,
-          silent: true
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.models && data.models.length > 0) {
-            setAvailableModels(data.models);
-            if (!data.models.includes(selectedModel) || selectedModel.includes('1.5') || selectedModel.includes('1.0')) {
-              const fallback = data.models.find((m: string) => m.includes('flash')) || data.models[0] || 'gemini-2.5-flash';
-              setSelectedModel(fallback);
-              localStorage.setItem('cheat_clip_selected_model', fallback);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to retrieve available models:', err);
-      } finally {
-        setLoadingModels(false);
-      }
-    };
-
-    const delayDebounce = setTimeout(() => {
-      fetchModels();
-    }, 600);
-
-    return () => clearTimeout(delayDebounce);
-  }, [apiKey]);
-
-  // OpenRouter models retrieval
-  useEffect(() => {
-    let isCancelled = false;
-    const fetchOpenRouterModels = async () => {
-      setLoadingOpenRouterModels(true);
-      try {
-        const cleanKey = openRouterKey.trim();
-        const res = await resilientFetch('/api/openrouter-models', {
-          headers: cleanKey ? { 'X-OpenRouter-Api-Key': cleanKey } : undefined,
-          maxRetries: 2,
-          retryDelay: 800,
-          silent: true
-        });
-        if (res.ok && !isCancelled) {
-          const data = await res.json();
-          if (data.models && Array.isArray(data.models) && data.models.length > 0) {
-            setOpenRouterModels(data.models);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to retrieve OpenRouter models:', err);
-      } finally {
-        if (!isCancelled) setLoadingOpenRouterModels(false);
-      }
-    };
-
-    fetchOpenRouterModels();
-    return () => {
-      isCancelled = true;
-    };
-  }, [openRouterKey]);
 
   // Sync marked clips with local storage based on active video ID
   useEffect(() => {

@@ -74,6 +74,14 @@ export interface FontItem {
   url?: string | null;
 }
 
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  description?: string;
+  context_length?: number;
+  recommended?: boolean;
+}
+
 export interface HardwareAccelInfo {
   status: string;
   active_default: string;

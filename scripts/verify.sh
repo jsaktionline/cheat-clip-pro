@@ -10,9 +10,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 run_frontend() {
-  echo "▶ Frontend: npm ci + lint + build"
+  echo "▶ Frontend: npm ci + lint + tests + build"
   npm ci --no-audit --no-fund
   npm run lint
+  npm test
   npm run build
 }
 

@@ -3,6 +3,28 @@
 All notable changes to Cheat Clip PRO are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] — 2026-10-24
+
+### Added
+
+- **11 frontend tests** with Vitest + jsdom (`src/**/*.test.ts`): API-key fetch
+  interceptor and the AI model catalogue hook.
+- Self-hosted FFmpeg WASM core (`@ffmpeg/core` bundled by Vite). The client
+  renderer no longer fetches code/WASM from unpkg or jsDelivr: it works offline,
+  avoids third-party requests, and fails fast with a retryable error.
+- `npm test` / `npm run test:watch` scripts and `vitest.config.ts`.
+- CI template and `scripts/verify.sh` now run the frontend test suite.
+
+### Changed
+
+- Extracted AI model fetching into `src/hooks/useAiModels.ts`: header-based key
+  transport, cancellable requests, debounced Gemini lookup, no duplicated
+  effects in `App.tsx`. Removed the now-unused `resilientFetch` import there.
+
+### Removed
+
+- Runtime CDN fallback for the in-browser renderer.
+
 ## [2.0.0] — 2026-10-24 (`chat-clip-prov2`)
 
 Hardening and quality release. No rendering pipeline changes; existing clips
@@ -61,6 +83,6 @@ render exactly as before.
 
 - Job state remains in-process, so the backend still runs as a single worker.
   A shared store (Redis/SQLite) is planned for a future release.
-- The client-side renderer loads `@ffmpeg/core` from unpkg/jsDelivr at runtime;
-  self-hosting the WASM bundle is planned.
+- `App.tsx`/`ClipStudioSection.tsx` are still large; the UI is being split into
+  hooks/components incrementally (AI model logic already extracted in 2.1.0).
 - `any` types and a few hook dependency warnings remain in the React codebase.

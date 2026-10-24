@@ -20,7 +20,7 @@ The push must be performed by an account/token with the `workflows` permission
 
 | Job | Command |
 | --- | --- |
-| Frontend | `npm ci && npm run lint && npm run build` |
+| Frontend | `npm ci && npm run lint && npm test && npm run build` |
 | Backend | `pip install -r backend/requirements-test.txt`, `ruff check backend`, `pytest backend/tests -q` |
 | Docker | `docker compose config --quiet` |
 
