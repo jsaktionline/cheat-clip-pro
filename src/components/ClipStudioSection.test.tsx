@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 
 import { ClipStudioSection } from './ClipStudioSection';
 import { LanguageProvider } from '../locales';
-import type { ViralClip } from '../types';
+import type { BatchRenderProgress, ViralClip } from '../types';
 
 const clip: ViralClip = {
   title: 'Test clip',
@@ -118,5 +118,52 @@ describe('ClipStudioSection', () => {
     );
 
     expect(document.body.textContent).toMatch(/no clips selected/i);
+  });
+
+  it('renders the batch queue and renders the primary CTA', () => {
+    const batchProgress: BatchRenderProgress = {
+      batch_id: 'batch_test',
+      total_clips: 2,
+      current_clip_index: 1,
+      overall_status: 'completed',
+      clips: [
+        {
+          clip_index: 0,
+          title: 'First clip',
+          status: 'completed',
+          progress_percent: 100,
+          download_url: '/api/download-rendered/first.mp4',
+        },
+        {
+          clip_index: 1,
+          title: 'Second clip',
+          status: 'error',
+          progress_percent: 40,
+          error: 'moov atom not found',
+        },
+      ],
+    };
+
+    render(
+      <LanguageProvider>
+        <ClipStudioSection
+          videoUrl=""
+          videoId="test-video"
+          allClips={[clip]}
+          markedClips={[clip]}
+          activeClip={clip}
+          onStartRender={vi.fn()}
+          isRendering={false}
+          batchProgress={batchProgress}
+          onRetryClip={vi.fn()}
+          onDismissProgress={vi.fn()}
+        />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText(/batch render queue/i)).toBeTruthy();
+    expect(screen.getByText(/batch render 1 clip/i)).toBeTruthy();
+    // The failed clip surfaces the friendly error box with a retry button.
+    expect(screen.getByText(/download interrupted/i)).toBeTruthy();
   });
 });

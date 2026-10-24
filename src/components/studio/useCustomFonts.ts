@@ -75,7 +75,6 @@ export function useCustomFonts({ onSelectTitleFont, onSelectCaptionFont }: UseCu
 
     void fetchAvailableFonts();
     // loadCustomFontFace is a stable local helper.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleUploadFont = async (file: File, target: 'title' | 'subtitle') => {

@@ -3,6 +3,20 @@
 All notable changes to Cheat Clip PRO are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] — 2026-10-24
+
+### Changed
+
+- Further decomposed the Clip Studio (now **3.8k lines**, down from 5,227):
+  - `useStudioPlayback.ts` — YouTube IFrame/HTML5 transport, looping, seek,
+    mute, face detection and tracking timer,
+  - `StudioBatchQueueCard.tsx` — per-clip batch progress, downloads, retries,
+  - `StudioActionFooter.tsx` — sticky render CTA, cookie warning, temp purge.
+- Sticky footer and batch queue are now pure presentational components driven
+  by explicit props; the studio keeps the JSX wiring 1:1 via destructuring.
+- Frontend suite grew to **45 tests**, including batch-queue/error-box rendering
+  and the full-studio jsdom smoke test.
+
 ## [2.2.0] — 2026-10-24
 
 ### Changed
