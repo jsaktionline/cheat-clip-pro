@@ -67,7 +67,8 @@ async def start_batch_render(request: RenderBatchRequest, background_tasks: Back
             "clips": clips_status,
             "zip_url": None,
             "is_merged": True,
-            "merged_segments_count": len(request.clips)
+            "merged_segments_count": len(request.clips),
+            "created_at": time.time(),
         }
     else:
         for idx, c in enumerate(request.clips):
@@ -87,7 +88,8 @@ async def start_batch_render(request: RenderBatchRequest, background_tasks: Back
             "overall_status": "running",
             "clips": clips_status,
             "zip_url": None,
-            "is_merged": False
+            "is_merged": False,
+            "created_at": time.time(),
         }
 
     BATCH_REQUESTS[batch_id] = request

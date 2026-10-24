@@ -7,28 +7,31 @@ services:
       dockerfile: Dockerfile
     container_name: cheat-clip-pro
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "8000:8000"
+      - "${PUBLISH_PORT:-8000}:8000"
     environment:
       - HOST=0.0.0.0
       - PORT=8000
+      # Keep temp downloads, uploads and renders on the persistent volume.
+      - CHEAT_CLIP_DATA_DIR=/data
+      # Strongly recommended for any internet-facing deployment: once set,
+      # state-changing API calls must send X-API-Key.
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - SUPADATA_API_KEYS=${SUPADATA_API_KEYS:-}
       - WEBSHARE_PROXY=${WEBSHARE_PROXY:-}
+      - JOB_TTL_SECONDS=${JOB_TTL_SECONDS:-21600}
     volumes:
-      - media_temp:/app/temp
-      - media_uploads:/app/uploads
-      - media_exports:/app/exports
-      - custom_fonts:/app/fonts
+      - media_data:/data
     deploy:
       resources:
         limits:
           memory: 3200M
 
 volumes:
-  media_temp:
-  media_uploads:
-  media_exports:
-  custom_fonts:
+  media_data:

@@ -4,7 +4,7 @@ import os
 import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from google import genai
 from google.genai import types
@@ -222,16 +222,26 @@ def supadata_usage_endpoint(refresh: bool = False):
 
 
 @router.get("/api/models")
-def list_available_models(api_key: str = ""):
-    """Fetches list of available Gemini models using the user's API key, prioritizing Flash models (newest first)."""
-    models = list_available_gemini_models(api_key)
+def list_available_models(
+    api_key: str = "",
+    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-Api-Key"),
+):
+    """Fetches list of available Gemini models using the user's API key.
+
+    The key is accepted through the ``X-Gemini-Api-Key`` header (preferred) or
+    the legacy ``api_key`` query parameter.
+    """
+    models = list_available_gemini_models(x_gemini_api_key or api_key)
     return {"models": models}
 
 
 @router.get("/api/openrouter-models")
-async def list_openrouter_models_endpoint(api_key: str = ""):
-    """Fetches list of available OpenRouter text-based LLM models."""
-    models = await fetch_openrouter_available_models(api_key)
+async def list_openrouter_models_endpoint(
+    api_key: str = "",
+    x_openrouter_api_key: Optional[str] = Header(None, alias="X-OpenRouter-Api-Key"),
+):
+    """Fetches OpenRouter models using the header-supplied key (query fallback)."""
+    models = await fetch_openrouter_available_models(x_openrouter_api_key or api_key)
     return {"models": models}
 
 

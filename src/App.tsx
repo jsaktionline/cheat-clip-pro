@@ -8,6 +8,7 @@ import { ClipTrimmerModal } from './components/ClipTrimmerModal';
 import { AppUpdateModal } from './components/AppUpdateModal';
 import { resilientFetch } from './utils/api';
 import { getStoredCookies, hasStoredCookies } from './utils/cookieUtils';
+import { getServerApiKey, setServerApiKey } from './utils/serverKey';
 import { extractAudioFromVideoClient } from './utils/audioExtractor';
 import { renderClipClientSide, triggerBrowserDownload } from './services/clientRenderer';
 import { renderClipWebCodecs, isWebCodecsGpuSupported } from './services/webcodecsRenderer';
@@ -77,6 +78,7 @@ export default function App() {
     return (saved === 'openrouter' || saved === 'gemini') ? saved : 'gemini';
   });
   const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('cheat_clip_openrouter_key') || '');
+  const [serverKey, setServerKeyState] = useState<string>(() => getServerApiKey());
   const [openRouterModel, setOpenRouterModel] = useState<string>(() => {
     const saved = localStorage.getItem('cheat_clip_openrouter_model');
     return saved || 'google/gemini-2.5-flash';
@@ -884,7 +886,8 @@ export default function App() {
       }
       setLoadingModels(true);
       try {
-        const res = await resilientFetch(`/api/models?api_key=${encodeURIComponent(cleanKey)}`, {
+        const res = await resilientFetch('/api/models', {
+          headers: { 'X-Gemini-Api-Key': cleanKey },
           maxRetries: 3,
           retryDelay: 800,
           silent: true
@@ -921,7 +924,8 @@ export default function App() {
       setLoadingOpenRouterModels(true);
       try {
         const cleanKey = openRouterKey.trim();
-        const res = await resilientFetch(`/api/openrouter-models?api_key=${encodeURIComponent(cleanKey)}`, {
+        const res = await resilientFetch('/api/openrouter-models', {
+          headers: cleanKey ? { 'X-OpenRouter-Api-Key': cleanKey } : undefined,
           maxRetries: 2,
           retryDelay: 800,
           silent: true
@@ -3453,6 +3457,28 @@ Transcript:
                   >
                     {t.form.providerOpenRouter}
                   </button>
+                </div>
+
+                {/* Optional server access key (ADMIN_API_KEY deployments) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255, 255, 255, 0.08)' }}>
+                  <label htmlFor="server-key-input" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>
+                    {t.form.serverKeyLabel}
+                  </label>
+                  <HackerApiKeyInput
+                    id="server-key-input"
+                    value={serverKey}
+                    onChange={(val) => {
+                      setServerKeyState(val);
+                      setServerApiKey(val);
+                    }}
+                    disabled={loading}
+                    placeholder={t.form.serverKeyPlaceholder}
+                    revealLabel={t.form.revealKey}
+                    maskLabel={t.form.maskKey}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {t.form.serverKeyHint}
+                  </span>
                 </div>
 
                 {/* Provider Content: GEMINI */}

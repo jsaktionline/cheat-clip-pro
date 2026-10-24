@@ -19,10 +19,14 @@ from PIL import Image, ImageDraw, ImageFont
 logger = logging.getLogger("cheat-clip-pro.video-engine")
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMP_DIR = BASE_DIR / "temp_clips"
-EXPORTS_DIR = BASE_DIR / "exports"
-FONTS_DIR = BASE_DIR / "fonts"
-COOKIES_PATH = BASE_DIR / "cookies.txt"
+
+# Media directories are configurable so container deployments can keep them on
+# a persistent volume without shadowing the bundled fonts that ship in the image.
+DATA_DIR = Path(os.environ.get("CHEAT_CLIP_DATA_DIR", str(BASE_DIR))).expanduser().resolve()
+TEMP_DIR = Path(os.environ.get("CHEAT_CLIP_TEMP_DIR", str(DATA_DIR / "temp_clips"))).expanduser()
+EXPORTS_DIR = Path(os.environ.get("CHEAT_CLIP_EXPORTS_DIR", str(DATA_DIR / "exports"))).expanduser()
+FONTS_DIR = Path(os.environ.get("CHEAT_CLIP_FONTS_DIR", str(BASE_DIR / "fonts"))).expanduser()
+COOKIES_PATH = Path(os.environ.get("CHEAT_CLIP_COOKIES_PATH", str(BASE_DIR / "cookies.txt"))).expanduser()
 ROOT_COOKIES_PATH = BASE_DIR.parent / "cookies.txt"
 
 

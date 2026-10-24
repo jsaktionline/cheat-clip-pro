@@ -69,7 +69,8 @@ async def handle_download_raw_video(req: RawVideoDownloadRequest, background_tas
         "eta": "",
         "download_url": None,
         "filename": f"{download_title}.mp4",
-        "error": None
+        "error": None,
+        "created_at": time.time(),
     }
 
     background_tasks.add_task(run_raw_download_job, job_id, v_url, out_path, filename, download_title, req.cookies)
@@ -99,7 +100,8 @@ async def handle_download_raw_clip(req: RawClipDownloadRequest, background_tasks
         "title": download_title,
         "download_url": None,
         "filename": f"{download_title}.mp4",
-        "error": None
+        "error": None,
+        "created_at": time.time(),
     }
 
     background_tasks.add_task(
