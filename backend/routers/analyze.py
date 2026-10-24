@@ -1,9 +1,8 @@
 import asyncio
 import json
-import logging
 import os
 import re
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -53,7 +52,9 @@ from backend.services.youtube_service import (
     get_supadata_usage_data,
 )
 from backend.utils.heatmap import get_average_heatmap_value
+from backend.utils.auth import get_configured_api_key
 from backend.utils.proxy import get_proxy_url
+from backend.utils.security import is_allowed_remote_url, resolve_local_media
 from backend.utils.sse import _sse
 from backend.utils.text import (
     detect_transcript_language,
@@ -203,6 +204,7 @@ def health_check(refresh: bool = False):
     return {
         "status": "ok",
         "message": "CHEAT CLIP PRO API is active",
+        "auth_required": bool(get_configured_api_key()),
         "is_vercel": is_vercel,
         "is_server": is_server_environment(),
         "allow_app_updates": is_update_allowed(),
@@ -254,6 +256,16 @@ async def analyze_video(request: AnalyzeRequest):
 
         # ── Step 1: Detect Source Type & Extract Metadata ───────────────────
         req_clean = request.url.strip()
+
+        # Reject unsupported / SSRF-prone remote sources before they reach
+        # yt-dlp or requests. Only YouTube and Google Drive hosts are allowed.
+        if req_clean.startswith(("http://", "https://")) and not is_allowed_remote_url(req_clean):
+            yield _sse({
+                "error": "Unsupported video source. Please use a YouTube or Google Drive link.",
+                "status": 400
+            })
+            return
+
         is_uploaded = False
         is_gdrive = is_google_drive_url(req_clean)
         uploaded_file_path: Optional[Path] = None
@@ -298,30 +310,28 @@ async def analyze_video(request: AnalyzeRequest):
             except Exception as e:
                 yield _sse({"error": f"Failed to fetch video from Google Drive: {str(e)}", "status": 400})
                 return
-        elif req_clean.startswith("upload_") or req_clean.startswith("/api/video/") or req_clean.startswith("file://") or os.path.exists(req_clean):
-            is_uploaded = True
-        elif (UPLOADS_DIR / os.path.basename(req_clean.split("?")[0])).exists():
+        elif req_clean.startswith("upload_") or req_clean.startswith("/api/video/"):
             is_uploaded = True
         else:
             from backend.routers.media import _find_video_file_on_disk
-            found_candidate = _find_video_file_on_disk(req_clean)
-            if found_candidate and found_candidate.exists():
+
+            # Only files that already live inside the app's media directories
+            # are accepted; arbitrary server-side paths are rejected.
+            local_candidate = resolve_local_media(req_clean, [UPLOADS_DIR, TEMP_DIR])
+            if local_candidate is None and not req_clean.startswith(("http://", "https://")):
+                local_candidate = _find_video_file_on_disk(req_clean)
+            if local_candidate is not None and local_candidate.is_file():
                 is_uploaded = True
-                uploaded_file_path = found_candidate
+                uploaded_file_path = local_candidate
 
         if is_uploaded:
             if uploaded_file_path is None:
                 from backend.routers.media import _find_video_file_on_disk
-                found = _find_video_file_on_disk(req_clean)
-                if found and found.exists():
-                    uploaded_file_path = found
-                elif os.path.exists(req_clean):
-                    uploaded_file_path = Path(req_clean)
-                elif (UPLOADS_DIR / os.path.basename(req_clean.split("?")[0])).exists():
-                    uploaded_file_path = UPLOADS_DIR / os.path.basename(req_clean.split("?")[0])
-                elif (TEMP_DIR / os.path.basename(req_clean.split("?")[0])).exists():
-                    uploaded_file_path = TEMP_DIR / os.path.basename(req_clean.split("?")[0])
-                else:
+
+                uploaded_file_path = resolve_local_media(req_clean, [UPLOADS_DIR, TEMP_DIR])
+                if uploaded_file_path is None:
+                    uploaded_file_path = _find_video_file_on_disk(req_clean)
+                if uploaded_file_path is None or not uploaded_file_path.is_file():
                     yield _sse({"error": "Uploaded video file not found on disk. Please upload again.", "status": 404})
                     return
 
@@ -1351,15 +1361,15 @@ async def analyze_video(request: AnalyzeRequest):
                                 step_prog = min(35, 12 + int(elapsed * 2.8))
                             elif elapsed < 20:
                                 stage = "Retention Spike Cross-Analysis"
-                                detail = f"Correlating viewer retention peaks against speaker dialogue to isolate viral moments..."
+                                detail = "Correlating viewer retention peaks against speaker dialogue to isolate viral moments..."
                                 step_prog = min(55, 35 + int((elapsed - 8) * 1.6))
                             elif elapsed < 40:
                                 stage = "Viral Hook & Curiosity Detection"
-                                detail = f"Scanning transcript dialogue for opening hooks, punchlines, controversial takes & emotional peaks..."
+                                detail = "Scanning transcript dialogue for opening hooks, punchlines, controversial takes & emotional peaks..."
                                 step_prog = min(75, 55 + int((elapsed - 20) * 1.0))
                             elif elapsed < 65:
                                 stage = "Coherence & Sentence Boundary Snapping"
-                                detail = f"Ensuring clip candidates start and end naturally on sentence boundaries without mid-word cuts..."
+                                detail = "Ensuring clip candidates start and end naturally on sentence boundaries without mid-word cuts..."
                                 step_prog = min(88, 75 + int((elapsed - 40) * 0.5))
                             elif elapsed < 90:
                                 stage = "Virality Scoring & Selection"
@@ -1518,10 +1528,10 @@ async def analyze_video(request: AnalyzeRequest):
         # Fallback clip synthesis if 0 clips were returned after all models
         if len(analysis_data.get('clips', [])) == 0 and enriched_transcript:
             logger.info("Generating fallback clips from heatmap and transcript segments...")
-            sorted_lines = sorted(enriched_transcript, key=lambda l: l.get('engagement', 0.0), reverse=True)
+            sorted_lines = sorted(enriched_transcript, key=lambda line: line.get('engagement', 0.0), reverse=True)
             candidate_starts = []
-            for l in sorted_lines:
-                s = l['start']
+            for line in sorted_lines:
+                s = line['start']
                 if not any(abs(s - existing) < 25.0 for existing in candidate_starts):
                     candidate_starts.append(s)
                 if len(candidate_starts) >= 5:
@@ -1539,7 +1549,7 @@ async def analyze_video(request: AnalyzeRequest):
                 else:
                     target_len = 30.0
                 et = min(duration, st + min(90.0, target_len))
-                seg_lines = [l['text'] for l in enriched_transcript if max(l['start'], st) < min(l['end'], et)]
+                seg_lines = [line['text'] for line in enriched_transcript if max(line['start'], st) < min(line['end'], et)]
                 seg_text = " ".join(seg_lines).strip()
                 preview = seg_text[:60] + "..." if len(seg_text) > 60 else seg_text or f"Viral Highlight #{i+1}"
                 if lang_code == 'id':
@@ -1598,8 +1608,8 @@ async def analyze_video(request: AnalyzeRequest):
             if is_auto_duration and (end - start) > 90.0:
                 max_end = start + 90.0
                 best_end = max_end
-                for l in enriched_transcript:
-                    l_end = l.get('end', 0.0)
+                for line in enriched_transcript:
+                    l_end = line.get('end', 0.0)
                     if start + 15.0 <= l_end <= max_end:
                         best_end = l_end
                 end = best_end

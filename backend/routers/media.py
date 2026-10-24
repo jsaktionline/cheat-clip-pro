@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import re
 import uuid
@@ -20,6 +19,7 @@ from backend.config import (
     is_valid_mp4,
     logger,
 )
+from backend.utils.security import is_path_within
 
 router = APIRouter(tags=["Media"])
 
@@ -31,14 +31,12 @@ MAX_IMAGE_UPLOAD_BYTES = 25 * 1024 * 1024         # 25 MB
 MAX_FONT_UPLOAD_BYTES = 50 * 1024 * 1024          # 50 MB
 
 
+_ALLOWED_MEDIA_ROOTS = (UPLOADS_DIR, TEMP_DIR, EXPORTS_DIR, FONTS_DIR)
+
+
 def _is_safe_path(target_path: Path) -> bool:
     """Ensures the resolved file path is strictly located within allowed media directories."""
-    try:
-        resolved = target_path.resolve()
-        allowed_roots = [UPLOADS_DIR.resolve(), TEMP_DIR.resolve(), EXPORTS_DIR.resolve(), FONTS_DIR.resolve()]
-        return any(resolved == root or resolved.is_relative_to(root) for root in allowed_roots)
-    except Exception:
-        return False
+    return is_path_within(target_path, _ALLOWED_MEDIA_ROOTS)
 
 
 async def _save_uploaded_file_chunked(file: UploadFile, save_path: Path, max_bytes: int) -> int:

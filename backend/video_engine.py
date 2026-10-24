@@ -440,7 +440,7 @@ def get_yt_dlp_base_cmd(
         cmd = ["yt-dlp"]
     else:
         try:
-            import yt_dlp
+            import yt_dlp  # noqa: F401  (availability probe for the python module)
             cmd = [sys.executable, "-m", "yt_dlp"]
         except ImportError:
             raise RuntimeError(
@@ -455,13 +455,11 @@ def get_yt_dlp_base_cmd(
         cmd.extend(["--js-runtimes", "node"])
 
     if cookies_path and Path(cookies_path).exists() and Path(cookies_path).stat().st_size > 0:
-        has_active_cookies = True
         logger.info(f"Using ephemeral YouTube cookies from: {cookies_path}")
         cmd.extend(["--cookies", str(cookies_path)])
     elif include_cookies:
         eff = get_effective_cookies_path()
         if eff and eff.exists() and eff.stat().st_size > 0:
-            has_active_cookies = True
             logger.info(f"Using YouTube cookies from: {eff}")
             cmd.extend(["--cookies", str(eff)])
 
@@ -1336,7 +1334,7 @@ def wrap_title_smart(text: str, max_single_len: int = 22) -> Tuple[str, int]:
 
     # Preserve manual newlines if the user specifically broke lines
     if "\n" in raw:
-        lines = [l.strip() for l in raw.split("\n") if l.strip()]
+        lines = [line.strip() for line in raw.split("\n") if line.strip()]
         return "\\N".join(lines), len(lines)
 
     words = raw.split()
@@ -1615,7 +1613,7 @@ def render_title_overlay_png(
     text_font = get_font(effective_title_font, title_font_size)
     emoji_font = get_emoji_font(int(title_font_size * 0.90))
 
-    lines = [l.strip() for l in formatted_title.split("\\N") if l.strip()]
+    lines = [line.strip() for line in formatted_title.split("\\N") if line.strip()]
     if not lines:
         lines = [formatted_title]
 
@@ -1636,36 +1634,7 @@ def render_title_overlay_png(
         text_font = get_font(font_name, title_font_size)
         emoji_font = get_emoji_font(int(title_font_size * 0.90))
 
-    # Content boundaries for aspect ratios
-    if target_aspect_ratio == "16:9_landscape":
-        content_top = 0
-        content_bot = 1080
-    elif streamer_preset == "split_top_cam":
-        if target_aspect_ratio == "16:9":
-            content_top = 352
-            content_bot = 1568
-        elif target_aspect_ratio == "4:3":
-            content_top = 150
-            content_bot = 1770
-        else:  # 1:1 and 9:16
-            content_top = 0
-            content_bot = 1920
-    else:
-        if target_aspect_ratio == "1:1":
-            content_top = 420
-            content_bot = 1500
-        elif target_aspect_ratio == "4:3":
-            content_top = 555
-            content_bot = 1365
-        elif target_aspect_ratio == "16:9":
-            content_top = 656
-            content_bot = 1264
-        else:  # 9:16
-            content_top = 0
-            content_bot = 1920
-
     line_step = int(title_font_size * 1.08)
-    est_title_h = int(title_line_count * line_step)
 
     # Title Positioning (100% WYSIWYG matching framing preview):
     if target_aspect_ratio == "16:9_landscape":
@@ -1888,12 +1857,11 @@ def generate_ass_file(
 
     # Title line step matching 1.08x line height of live preview CSS box model
     line_step = int(title_font_size * 1.08)
-    est_title_h = int(title_line_count * line_step)
     est_sub_h = int(sub_font_size * 1.08)
     sub_align = 5 if subtitle_position_mode == "center" else 2
 
     # Ensure title line width does not overflow screen edges in ASS
-    title_lines_check = [l.strip() for l in formatted_title.split("\\N") if l.strip()]
+    title_lines_check = [line.strip() for line in formatted_title.split("\\N") if line.strip()]
     if title_lines_check:
         max_allowed_w = canvas_w - 70
         test_font = get_font(title_font_name or font_name, title_font_size)
@@ -1906,8 +1874,7 @@ def generate_ass_file(
             scale_factor = max_allowed_w / max_w
             title_font_size = max(30, int(title_font_size * scale_factor))
             line_step = int(title_font_size * 1.08)
-            est_title_h = int(title_line_count * line_step)
-
+        
     # Title Positioning (100% WYSIWYG matching framing preview):
     if is_landscape:
         effective_title_y_pct = float(title_y_percent) if title_y_percent is not None else (5.5 if title_line_count >= 3 else (6.5 if title_line_count == 2 else 8.0))
@@ -2043,7 +2010,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             t_end_sec = max(1.0, duration_seconds)
 
         end_time_str = format_ass_timestamp(t_end_sec)
-        title_lines = [l.strip() for l in formatted_title.split("\\N") if l.strip()]
+        title_lines = [line.strip() for line in formatted_title.split("\\N") if line.strip()]
         base_ass_y = max(10, title_y - int(title_font_size * 0.15))
         for line_idx, t_line in enumerate(title_lines):
             line_y = base_ass_y + (line_idx * line_step)
@@ -2655,11 +2622,11 @@ def build_ffmpeg_filtergraph(
             )
             if background_style == "blurred":
                 filters.append(
-                    f"[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
-                    f"[bg_blurred][both_split]overlay=0:352[layout_base]"
+                    "[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
+                    "[bg_blurred][both_split]overlay=0:352[layout_base]"
                 )
             else:
-                filters.append(f"[both_split]pad=1080:1920:0:352:black[layout_base]")
+                filters.append("[both_split]pad=1080:1920:0:352:black[layout_base]")
 
         elif aspect_ratio == "1:1":
             # 1:1 split: top cam 960x960 (1:1) tightly cropped around face, bottom feed 960x960 (1:1)
@@ -2675,11 +2642,11 @@ def build_ffmpeg_filtergraph(
             )
             if background_style == "blurred":
                 filters.append(
-                    f"[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
-                    f"[bg_blurred][both_split]overlay=60:0[layout_base]"
+                    "[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
+                    "[bg_blurred][both_split]overlay=60:0[layout_base]"
                 )
             else:
-                filters.append(f"[both_split]pad=1080:1920:60:0:black[layout_base]")
+                filters.append("[both_split]pad=1080:1920:60:0:black[layout_base]")
 
         elif aspect_ratio == "4:3":
             # 4:3 split: top cam 1080x810 (4:3) tightly cropped around face, bottom feed 1080x810 (4:3)
@@ -2695,11 +2662,11 @@ def build_ffmpeg_filtergraph(
             )
             if background_style == "blurred":
                 filters.append(
-                    f"[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
-                    f"[bg_blurred][both_split]overlay=0:150[layout_base]"
+                    "[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=12:2,scale=1080:1920,eq=saturation=1.2:contrast=1.05[bg_blurred];"
+                    "[bg_blurred][both_split]overlay=0:150[layout_base]"
                 )
             else:
-                filters.append(f"[both_split]pad=1080:1920:0:150:black[layout_base]")
+                filters.append("[both_split]pad=1080:1920:0:150:black[layout_base]")
 
         else:  # 9:16
             # 9:16 Split: full bleed 1080x1920 with crisp facecam on top and centered gameplay on bottom

@@ -1,21 +1,14 @@
 import json
-import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
 from backend.config import (
     COOKIES_PATH,
     ROOT_COOKIES_PATH,
-    get_effective_cookies_path,
-    logger,
 )
-from backend.schemas.downloads import CookiesSaveRequest
+from backend.video_engine import normalize_to_netscape
 
 router = APIRouter(tags=["Cookies"])
-
-
-from backend.video_engine import normalize_to_netscape
 
 
 @router.post("/api/cookies")

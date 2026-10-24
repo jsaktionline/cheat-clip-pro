@@ -1,13 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize environment and configuration
-import backend.config
 from backend.config import logger
 from backend.routers import (
     analyze_router,
@@ -18,34 +16,9 @@ from backend.routers import (
     system_router,
 )
 # Re-exports for backwards compatibility
-from backend.schemas.analyze import (
-    AnalyzeRequest,
-    AnalyzeResponse,
-    HeatmapPoint,
-    TranscriptLine,
-    VideoAnalysis,
-    ViralClip,
-    ViralClipGemini,
-)
-from backend.schemas.downloads import (
-    CookiesSaveRequest,
-    RawClipDownloadRequest,
-    RawVideoDownloadRequest,
-)
-from backend.schemas.render import (
-    RenderBatchRequest,
-    RenderSettingsModel,
-    RetryBatchRequest,
-)
-from backend.services.download_service import (
-    raw_clip_download_jobs,
-    raw_download_jobs,
-)
-from backend.services.render_service import (
-    BATCH_REQUESTS,
-    RENDER_BATCHES,
-)
 from backend.services.system_service import auto_cleanup_expired_files
+from backend.utils.auth import api_key_middleware
+from backend.utils.security import resolve_spa_file
 
 
 async def background_storage_cleanup_worker():
@@ -121,8 +94,14 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
+
+
+# Optional API-key enforcement for state-changing requests (no-op unless
+# ADMIN_API_KEY / CHEAT_CLIP_API_KEY is configured).
+app.middleware("http")(api_key_middleware)
 
 
 # Include Modular Routers
@@ -139,17 +118,31 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 dist_dir = Path(__file__).resolve().parent.parent / "dist"
-if dist_dir.exists() and (dist_dir / "index.html").exists():
-    if (dist_dir / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=dist_dir / "assets"), name="assets")
 
-    @app.get("/{full_path:path}")
+
+def mount_spa(application: FastAPI, dist_path: Path) -> bool:
+    """Serve the built Vite bundle, safely confined to ``dist_path``.
+
+    Returns ``False`` when no production build is present (development mode).
+    """
+    if not (dist_path / "index.html").exists():
+        return False
+
+    assets_dir = dist_path / "assets"
+    if assets_dir.exists():
+        application.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @application.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        file_candidate = dist_dir / full_path
-        if full_path and file_candidate.exists() and file_candidate.is_file():
-            return FileResponse(file_candidate)
-        return FileResponse(dist_dir / "index.html")
-    
+        candidate = resolve_spa_file(dist_path, full_path) if full_path else None
+        if candidate is not None:
+            return FileResponse(candidate)
+        return FileResponse(dist_path / "index.html")
+
+    return True
+
+
+if mount_spa(app, dist_dir):
     logger.info("Cheat Clip PRO production frontend mounted from dist/.")
 else:
     logger.info("Cheat Clip PRO backend routers mounted successfully.")

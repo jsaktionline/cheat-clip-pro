@@ -1,6 +1,5 @@
 import html
 import json
-import logging
 import os
 import re
 import subprocess
@@ -23,7 +22,6 @@ from youtube_transcript_api.formatters import JSONFormatter
 
 from backend.config import TEMP_DIR, get_effective_cookies_path, ephemeral_cookies_file, logger
 from backend.utils.proxy import (
-    TimeoutSession,
     _shared_cookie_jar,
     create_http_client,
     get_proxy_url,
@@ -31,7 +29,6 @@ from backend.utils.proxy import (
 )
 from backend.utils.text import (
     extract_video_id,
-    detect_transcript_language,
     validate_transcript_language,
 )
 
@@ -161,7 +158,7 @@ def fetch_transcript_cli(
     elif expected_language == 'en':
         effective_langs = ['en', 'en-US', 'en-GB']
     elif priority_langs:
-        effective_langs = [l for l in priority_langs if l.split('-')[0].lower() in ('id', 'in', 'en')]
+        effective_langs = [lang for lang in priority_langs if lang.split('-')[0].lower() in ('id', 'in', 'en')]
         if not effective_langs:
             effective_langs = ['id', 'en']
     else:
@@ -584,7 +581,7 @@ def fetch_transcript_ytdlp(
 
                 # Manual subtitles first, then auto captions in matching language
                 for lang_dict, is_auto in [(subtitles, False), (auto_subtitles, True)]:
-                    ordered_langs = [l for l in langs_to_try if l in lang_dict]
+                    ordered_langs = [lang for lang in langs_to_try if lang in lang_dict]
                     for lang in ordered_langs:
                         base_l = lang.split('-')[0].lower()
                         if base_l not in ('id', 'in', 'en'):

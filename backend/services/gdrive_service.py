@@ -1,22 +1,27 @@
-import logging
-import os
 import re
 import time
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import urlparse
 
 import requests
 import yt_dlp
 
-from backend.config import TEMP_DIR, UPLOADS_DIR, get_video_file_metadata, is_valid_mp4, logger
+from backend.config import UPLOADS_DIR, logger
 
 
 def is_google_drive_url(url: str) -> bool:
     """Checks whether the given URL is a Google Drive share or file link."""
     if not url:
         return False
-    u = url.strip()
-    return bool(re.search(r'(?:drive\.google\.com|docs\.google\.com|drive\.usercontent\.google\.com)', u))
+    try:
+        parsed = urlparse(url.strip())
+    except ValueError:
+        return False
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").lower().rstrip(".")
+    return host in {"drive.google.com", "docs.google.com", "drive.usercontent.google.com"}
 
 
 def extract_google_drive_file_id(url: str) -> Optional[str]:
@@ -75,7 +80,6 @@ def download_google_drive_video(
         on_progress("Connecting to Google Drive", "Requesting video stream from Google Drive...", 10)
 
     # 2. Strategy A: yt-dlp GoogleDrive extractor
-    yt_success = False
     try:
         def ydl_hook(d):
             if d.get("status") == "downloading" and on_progress:

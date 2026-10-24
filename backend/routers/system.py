@@ -1,11 +1,8 @@
-import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.config import _base_dir, logger
 from backend.services.system_service import (
@@ -14,35 +11,13 @@ from backend.services.system_service import (
     clear_temp_files,
     get_current_git_info,
     get_temp_storage_summary,
-    is_server_environment,
     is_update_allowed,
     run_git_command,
     trigger_detached_restart,
 )
+from backend.utils.auth import verify_admin_access
 
 router = APIRouter(tags=["System"])
-
-
-def verify_admin_access(
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-    authorization: Optional[str] = Header(None)
-) -> bool:
-    """
-    Verifies administrative authorization.
-    If ADMIN_API_KEY or CHEAT_CLIP_API_KEY is configured in .env, requires matching token.
-    If no secret key is set, allows open access for local desktop installation.
-    """
-    admin_key = (os.environ.get("ADMIN_API_KEY") or os.environ.get("CHEAT_CLIP_API_KEY") or "").strip()
-    if not admin_key:
-        return True
-
-    provided = (x_api_key or "").strip()
-    if not provided and authorization and authorization.startswith("Bearer "):
-        provided = authorization[7:].strip()
-
-    if provided != admin_key:
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing administrator API key")
-    return True
 
 
 @router.get("/api/temp-storage-info")

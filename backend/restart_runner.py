@@ -5,7 +5,6 @@ frees ports 8000 and 5173, and relaunches `npm run dev` in a fresh console.
 """
 
 import os
-import sys
 import time
 import subprocess
 import argparse

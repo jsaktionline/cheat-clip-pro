@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import re
 import shutil
@@ -20,6 +19,8 @@ from backend.config import (
     is_valid_mp4,
     logger,
 )
+
+from backend.utils.security import resolve_within
 
 raw_download_jobs: Dict[str, dict] = {}
 raw_clip_download_jobs: Dict[str, dict] = {}
@@ -44,16 +45,17 @@ async def run_raw_download_job(
     try:
         raw_download_jobs[job_id]["status"] = "downloading"
 
-        # Check if local video exists in UPLOADS_DIR / TEMP_DIR (e.g. Google Drive or Uploaded video)
+        # Resolve a local source strictly inside the app's media directories.
+        # Never trust ``v_url`` as a filesystem path (prevents arbitrary reads).
         clean_vname = urllib.parse.unquote(os.path.basename(v_url.split("?")[0])).strip()
         local_src = None
-        if os.path.exists(v_url):
-            local_src = os.path.abspath(v_url)
-        elif (UPLOADS_DIR / clean_vname).exists():
-            local_src = str(UPLOADS_DIR / clean_vname)
-        elif (TEMP_DIR / clean_vname).exists():
-            local_src = str(TEMP_DIR / clean_vname)
-        else:
+        if clean_vname:
+            for base in (UPLOADS_DIR, TEMP_DIR, EXPORTS_DIR):
+                candidate = resolve_within(base, clean_vname)
+                if candidate is not None and candidate.is_file():
+                    local_src = str(candidate)
+                    break
+        if not local_src:
             for d in [UPLOADS_DIR, TEMP_DIR, EXPORTS_DIR]:
                 if d.exists():
                     for f in d.iterdir():

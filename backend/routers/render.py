@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 import re
 import time
@@ -19,7 +18,6 @@ from backend.config import (
 )
 from backend.schemas.render import (
     RenderBatchRequest,
-    RenderSettingsModel,
     RetryBatchRequest,
 )
 from backend.services.render_service import (
@@ -28,6 +26,7 @@ from backend.services.render_service import (
     process_batch_rendering,
     process_batch_retry,
 )
+from backend.utils.security import resolve_within
 
 router = APIRouter(tags=["Render"])
 
@@ -186,10 +185,10 @@ async def get_render_progress(batch_id: str):
 
 @router.get("/api/download-rendered/{file_name}")
 def download_rendered_file(file_name: str, title: Optional[str] = None):
-    safe_name = os.path.basename(file_name)
-    file_path = EXPORTS_DIR / safe_name
-    if not file_path.exists():
+    file_path = resolve_within(EXPORTS_DIR, file_name)
+    if file_path is None or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Rendered clip not found")
+    safe_name = file_path.name
 
     # If title provided, sanitize and use as download filename
     dl_filename = safe_name

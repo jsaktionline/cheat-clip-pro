@@ -1,0 +1,31 @@
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    "backend/temp_clips",
+    "backend/exports",
+    "backend/cascades",
+    "dist",
+    "node_modules",
+]
+
+[tool.ruff.lint]
+# Start from a pragmatic baseline: correctness rules that catch real bugs.
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# config.py intentionally re-exports the video engine API for backwards
+# compatibility and performs a late import after OS compatibility shims.
+"backend/config.py" = ["F401", "E402"]
+# main.py mounts the production SPA after routers are registered.
+"backend/main.py" = ["E402"]
+# youtube_service.py sets up SSL/proxy environment before importing clients.
+"backend/services/youtube_service.py" = ["E402"]
+# services/__init__.py is a public facade.
+"backend/services/__init__.py" = ["F401"]
