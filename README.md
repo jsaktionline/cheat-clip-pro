@@ -14,7 +14,7 @@ This branch is a security and quality-focused iteration of `master`:
 * 🔑 Optional `X-API-Key` protection for all state-changing API calls.
 * 🧹 TTL-based pruning of in-memory render/download jobs (no more memory leak).
 * 🐳 Docker volumes and healthcheck fixed (renders/uploads now persist).
-* ✅ 81 backend tests + 11 frontend tests, `ruff` clean, ESLint 0 errors,
+* ✅ 81 backend tests + 17 frontend tests, `ruff` clean, ESLint 0 errors,
   CI template included.
 * 📄 `LICENSE`, `SECURITY.md`, `CHANGELOG.md` added.
 

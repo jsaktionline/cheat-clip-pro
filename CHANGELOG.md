@@ -3,6 +3,15 @@
 All notable changes to Cheat Clip PRO are documented here.
 The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Extracted the cached-history parser from `App.tsx` into
+  `src/utils/history.ts` with 6 additional unit tests (YouTube/upload/Drive
+  entries, sorting, malformed data, unavailable storage). `App.tsx` is now
+  ~80 lines shorter and the parser is independently testable.
+
 ## [2.1.0] — 2026-10-24
 
 ### Added
