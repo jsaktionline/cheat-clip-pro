@@ -4,6 +4,27 @@
 
 ---
 
+## 🆕 v2: hardened & tested (`chat-clip-prov2`)
+
+This branch is a security and quality-focused iteration of `master`:
+
+* 🔒 Path traversal in the SPA route fixed; every filesystem path is confined.
+* 🛡️ SSRF protection — only YouTube/Google Drive URLs are accepted; arbitrary
+  local paths are rejected.
+* 🔑 Optional `X-API-Key` protection for all state-changing API calls.
+* 🧹 TTL-based pruning of in-memory render/download jobs (no more memory leak).
+* 🐳 Docker volumes and healthcheck fixed (renders/uploads now persist).
+* ✅ 81 backend tests, `ruff` clean, frontend lint green, GitHub Actions CI.
+* 📄 `LICENSE`, `SECURITY.md`, `CHANGELOG.md` added.
+
+Jump to: [Architecture](#-architecture) · [Testing](#-testing--ci) ·
+[Docker deployment](#-docker-deployment) · [Security](#-security).
+
+> ⚠️ **Deploying to a server?** Set `ADMIN_API_KEY` (see [SECURITY.md](SECURITY.md)).
+> The desktop app keeps working with no configuration.
+
+---
+
 ## ⚡ Quick Start & Setup
 
 Follow these steps to set up and run Cheat Clip PRO locally on **Windows**, **macOS**, or **Linux**.
@@ -16,7 +37,7 @@ Make sure you have the following installed:
    * **Windows:** `winget install Git.Git` or download from [git-scm.com](https://git-scm.com/)
    * **macOS:** `brew install git`
    * **Linux:** `sudo apt install git`
-2. **[Node.js](https://nodejs.org/)** (v18 or newer)
+2. **[Node.js](https://nodejs.org/)** (v22 recommended; v20.19+ minimum)
    * Download from [nodejs.org](https://nodejs.org/) or install via your package manager.
 3. **[Python](https://www.python.org/)** (v3.10 or newer)
    * **Windows:** Install from [python.org](https://www.python.org/downloads/) (make sure to check *"Add Python to PATH"* during setup) or from Microsoft Store.
@@ -47,8 +68,9 @@ Make sure you have the following installed:
 Open your terminal and clone the repository:
 
 ```bash
-git clone https://github.com/galihjuansaputra/cheat-clip-pro.git
+git clone https://github.com/jsaktionline/cheat-clip-pro.git
 cd cheat-clip-pro
+git checkout chat-clip-prov2   # v2: hardened, tested branch
 ```
 
 ---
@@ -175,3 +197,99 @@ Cheat Clip PRO uses Google's AI to find the best viral moments for free:
 ## 📄 License
 
 Distributed under the **MIT License**. Free for personal and commercial use!
+See [LICENSE](LICENSE).
+
+---
+
+## 🧱 Architecture
+
+```
+src/                      React 19 + Vite 8 + TypeScript (UI)
+  components/             Feature components + co-located CSS modules
+  services/               Client-side renderers (FFmpeg WASM, WebCodecs)
+  utils/                  API client, cookies, face detection, server key
+backend/
+  main.py                 FastAPI app, security middleware, SPA mounting
+  routers/                HTTP endpoints (analyze, render, media, downloads…)
+  services/               Business logic (download, render, AI, job registry)
+  schemas/                Pydantic request/response models
+  utils/                  Pure helpers: security, cookies, text, sse, proxy
+  tests/                  pytest suite (security, auth, cookies, jobs)
+```
+
+Key helpers added in v2:
+
+| Module | Purpose |
+| --- | --- |
+| `backend/utils/security.py` | Path confinement, SPA resolver, SSRF-safe URL allowlist |
+| `backend/utils/auth.py` | Optional API-key middleware + admin dependency |
+| `backend/utils/cookies.py` | Cookie format normalisation (Netscape/JSON/header) |
+| `backend/services/job_registry.py` | TTL + history cap for in-memory jobs |
+
+---
+
+## ✅ Testing & CI
+
+```bash
+# Backend (fast, no torch/whisper needed)
+python3 -m venv venv
+source venv/bin/activate           # Windows: venv\Scripts\activate
+pip install -r backend/requirements-test.txt
+ruff check backend
+pytest backend/tests -q
+
+# Frontend
+npm ci
+npm run lint
+npm run build
+```
+
+CI pipeline: the workflow lives at [`docs/ci/ci.yml`](docs/ci/ci.yml) (GitHub
+App tokens without the `workflows` permission cannot push to
+`.github/workflows/`). Copy it to `.github/workflows/ci.yml` to enable it, or
+run the exact same checks locally:
+
+```bash
+./scripts/verify.sh          # frontend + backend
+./scripts/verify.sh backend  # ruff + pytest only
+```
+
+---
+
+## 🐳 Docker Deployment
+
+```bash
+# Optional but strongly recommended for public servers
+export ADMIN_API_KEY="$(openssl rand -hex 24)"
+docker compose up -d --build
+```
+
+* Web UI/API: `http://localhost:8000`
+* Persistent data (downloads, uploads, renders): volume `media_data` → `/data`
+* Health endpoint: `/api/health` (used by the container healthcheck)
+* Bind to localhost only: `PUBLISH_PORT=127.0.0.1:8000 docker compose up -d`
+
+Environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ADMIN_API_KEY` | *(empty)* | Enables `X-API-Key` protection for mutating routes |
+| `CHEAT_CLIP_DATA_DIR` | `backend/` | Root for `temp_clips/`, `exports/`, uploads |
+| `JOB_TTL_SECONDS` | `21600` | How long finished job metadata is kept |
+| `TEMP_MAX_AGE_SECONDS` | `3600` | Temp file TTL for the cleanup worker |
+| `TEMP_STORAGE_QUOTA_GB` | `5.0` | Max temp storage before FIFO purge |
+| `ALLOWED_ORIGINS` | localhost | Comma-separated CORS origins |
+
+---
+
+## 🔐 Security
+
+See [SECURITY.md](SECURITY.md) for the full policy and deployment checklist.
+Highlights:
+
+* All user paths are resolved and confined with `relative_to()`.
+* Remote sources are allowlisted (YouTube/Drive) — private IPs and credentials
+  are rejected, preventing SSRF.
+* `ADMIN_API_KEY` enables constant-time API-key checks for all state-changing
+  requests; the UI sends it via the *Server Access Key* field.
+* Uploads are streamed with hard size limits and sanitised filenames.

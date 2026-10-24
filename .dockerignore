@@ -11,9 +11,15 @@ __pycache__
 .env.local
 .env.*.local
 scratch
-temp
-exports
-uploads
-fonts
+
+# Runtime / generated media (keep bundled backend/fonts + cascades!)
+/temp
+/exports
+/uploads
+/fonts
+/backend/temp_clips
+/backend/exports
+/backend/cookies.txt
+/backend/*.ass
 logs
 *.log

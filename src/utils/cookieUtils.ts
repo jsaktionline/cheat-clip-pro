@@ -70,6 +70,7 @@ export function normalizeCookies(rawContent: string): string {
   const text = rawContent
     .replace(/\ufeff/g, '')
     .replace(/\ufffe/g, '')
+    // eslint-disable-next-line no-control-regex -- NUL bytes are stripped on purpose
     .replace(/\x00/g, '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -335,9 +336,13 @@ export function setStoredCookies(content: string): boolean {
         window.dispatchEvent(new StorageEvent('storage', { key: COOKIES_STORAGE_KEY, newValue: prunedStr }));
       }
       return true;
-    } catch (finalErr: any) {
+    } catch (finalErr: unknown) {
       console.error('[cookieUtils] Failed to write cookies to localStorage:', finalErr);
-      throw new Error(`LocalStorage is full or restricted: ${finalErr?.message || 'QuotaExceededError'}. Please clear browser cache.`);
+      const message = finalErr instanceof Error ? finalErr.message : String(finalErr);
+      throw new Error(
+        `LocalStorage is full or restricted: ${message || 'QuotaExceededError'}. Please clear browser cache.`,
+        { cause: finalErr },
+      );
     }
   }
 }

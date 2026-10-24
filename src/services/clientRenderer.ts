@@ -94,9 +94,9 @@ export async function renderClipClientSide(options: ClientRenderOptions): Promis
   await ffmpeg.writeFile('input.mp4', inputData);
 
   // Construct FFmpeg filters based on aspect ratio and background style
-  let filterStr = '';
-  let targetWidth = 1080;
-  let targetHeight = 1920;
+  let filterStr: string;
+  let targetWidth: number;
+  let targetHeight: number;
 
   let lastFfmpegLog = '';
   const logHandler = ({ message }: { message: string }) => {
@@ -177,9 +177,10 @@ export async function renderClipClientSide(options: ClientRenderOptions): Promis
     if (exitCode !== 0) {
       throw new Error(`FFmpeg WASM exited with code ${exitCode}. Details: ${lastFfmpegLog || 'Encoding error'}`);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('FFmpeg WASM execution error:', err, 'Last log:', lastFfmpegLog);
-    throw new Error(err?.message || lastFfmpegLog || 'Browser WASM engine memory limit exceeded');
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(message || lastFfmpegLog || 'Browser WASM engine memory limit exceeded', { cause: err });
   } finally {
     try {
       ffmpeg.off('log', logHandler);

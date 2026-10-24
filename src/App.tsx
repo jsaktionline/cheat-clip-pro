@@ -1403,9 +1403,8 @@ export default function App() {
     // Automatically stop video at end time (optional user experience feature)
     // We can monitor playback and pause if it goes past end_time
     const intervalId = window.setInterval(() => {
-      let curr = 0;
       if (directVideoPlayerRef.current) {
-        curr = directVideoPlayerRef.current.currentTime;
+        const curr = directVideoPlayerRef.current.currentTime;
         if (curr >= clip.end_time) {
           directVideoPlayerRef.current.pause();
           clearInterval(intervalId);
@@ -1414,7 +1413,7 @@ export default function App() {
           }
         }
       } else if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
-        curr = playerRef.current.getCurrentTime();
+        const curr = playerRef.current.getCurrentTime();
         if (curr >= clip.end_time) {
           playerRef.current.pauseVideo();
           clearInterval(intervalId);
@@ -5355,7 +5354,7 @@ Transcript:
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <span className="clip-title" style={{ color: !!markedClips[`${clip.start_time}_${clip.end_time}`] ? 'var(--secondary)' : 'var(--text-primary)', opacity: 1 }}>
+                                    <span className="clip-title" style={{ color: markedClips[`${clip.start_time}_${clip.end_time}`] ? 'var(--secondary)' : 'var(--text-primary)', opacity: 1 }}>
                                       {clip.title}
                                     </span>
                                     <button

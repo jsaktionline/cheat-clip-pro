@@ -71,8 +71,8 @@ export async function renderClipWebCodecs(options: WebCodecsRenderOptions): Prom
   if (onProgress) onProgress(5, 'Initializing Client GPU Hardware Encoder...');
 
   // Setup target dimensions
-  let targetWidth = 1080;
-  let targetHeight = 1920;
+  let targetWidth: number;
+  let targetHeight: number;
 
   if (aspectRatio === '9:16') {
     targetWidth = 1080;

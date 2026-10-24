@@ -6,7 +6,7 @@ from backend.config import (
     COOKIES_PATH,
     ROOT_COOKIES_PATH,
 )
-from backend.video_engine import normalize_to_netscape
+from backend.utils.cookies import normalize_to_netscape
 
 router = APIRouter(tags=["Cookies"])
 

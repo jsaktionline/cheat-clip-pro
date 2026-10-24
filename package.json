@@ -1,7 +1,7 @@
 {
   "name": "cheat-clip-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently --prefix \"[{name}]\" --names \"frontend,backend\" -c \"cyan,magenta\" \"npm run dev-frontend\" \"npm run dev-backend\"",
@@ -9,6 +9,10 @@
     "dev-backend": "node scripts/start-backend.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc -b",
+    "test:backend": "python -m pytest backend/tests -q",
+    "test:lint:backend": "python -m ruff check backend",
     "preview": "vite preview"
   },
   "dependencies": {
